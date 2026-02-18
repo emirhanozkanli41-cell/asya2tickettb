@@ -31,7 +31,8 @@ const HIZLI_LINKLER = {
 
 client.once('ready', () => {
     console.log(`🛡️ ${client.user.tag} aktif!`);
-    client.user.setActivity('Asya2 Rank & Destek', { type: 3 });
+    // DURUM: "Asya2 oynuyor" olarak ayarlandı
+    client.user.setActivity('Asya2', { type: 0 }); // 0 = Oynuyor
 });
 
 // --- HOŞ GELDİN SİSTEMİ ---
@@ -55,6 +56,26 @@ client.on('guildMemberAdd', async (member) => {
 client.on('messageCreate', async (message) => {
     if (message.author.bot || !message.guild) return;
     const content = message.content.toLowerCase().trim();
+    const args = message.content.split(' ');
+
+    // --- TEMİZLE KOMUTU ---
+    if (content.startsWith('!temizle')) {
+        if (!message.member.permissions.has(PermissionsBitField.Flags.ManageMessages)) {
+            return message.reply("❌ Bu komutu kullanmak için `Mesajları Yönet` yetkin olmalı.");
+        }
+        const miktar = parseInt(args[1]);
+        if (isNaN(miktar) || miktar < 1 || miktar > 100) {
+            return message.reply("⚠️ Lütfen temizlenecek mesaj sayısını girin (1-100 arası). Örnek: `!temizle 50`").then(msg => setTimeout(() => msg.delete(), 5000));
+        }
+        try {
+            await message.channel.bulkDelete(miktar + 1, true);
+            const basari = await message.channel.send(`✅ **${miktar}** adet mesaj başarıyla temizlendi!`);
+            setTimeout(() => basari.delete(), 3000); // 3 saniye sonra bildirim silinir
+        } catch (err) {
+            message.reply("❌ 14 günden eski mesajları Discord kuralları gereği silemiyorum.");
+        }
+        return;
+    }
 
     // --- HIZLI LİNKLER ---
     if (HIZLI_LINKLER[content]) {
@@ -65,7 +86,6 @@ client.on('messageCreate', async (message) => {
     let userData = userXP.get(message.author.id) || { xp: 0, level: 1 };
     userData.xp += Math.floor(Math.random() * 10) + 5;
     let nextLevelXP = userData.level * 150;
-
     if (userData.xp >= nextLevelXP) {
         userData.level++;
         userData.xp = 0;
@@ -77,7 +97,6 @@ client.on('messageCreate', async (message) => {
     if (content === '!rank' || content === '!level') {
         const progress = Math.min(Math.floor((userData.xp / nextLevelXP) * 10), 10);
         const bar = "🟩".repeat(progress) + "⬜".repeat(10 - progress);
-
         const rankEmbed = new EmbedBuilder()
             .setAuthor({ name: `🛡️ ASYA2 RANK`, iconURL: client.user.displayAvatarURL() })
             .setTitle(`${message.author.username} Profil Bilgisi`)
@@ -85,7 +104,6 @@ client.on('messageCreate', async (message) => {
             .setImage('https://cdn.discordapp.com/attachments/1028301267547738244/1473628348335915132/4.webp') 
             .setColor('#e74c3c')
             .setThumbnail(message.author.displayAvatarURL({ dynamic: true }));
-
         return message.channel.send({ embeds: [rankEmbed] });
     }
 
@@ -93,7 +111,7 @@ client.on('messageCreate', async (message) => {
     if (content === '!ticket-kur' && message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
         const embed = new EmbedBuilder()
             .setTitle('🎫 Asya2 Destek Sistemi Kuralları')
-            .setDescription(`**Destek talebi oluşturmadan önce lütfen kuralları okuyunuz.**\n\n❌ **Gereksiz Talep:** Sohbet amaçlı talepler kapatılır.\n⏳ **Sabırlı Olun:** Yetkililer en kısa sürede dönüş yapacaktır.\n⚖️ **Üslup ve Saygı:** Argo ve küfür sınırsız BAN sebebidir.\n📸 **Kanıt Sunma:** Görsel/Video zorunludur.\n🔐 **Hesap Güvenliği:** Yetkililer asla şifrenizi istemez!\n\n**Sorununuzla ilgili butona tıklayarak işlem başlatın:**`)
+            .setDescription(`**Destek talebi oluşturmadan önce lütfen kuralları okuyunuz.**\n\n❌ **Gereksiz Talep:** Sohbet amaçlı talepler kapatılır.\n⚖️ **Üslup ve Saygı:** Argo ve küfür sınırsız BAN sebebidir.\n📸 **Kanıt Sunma:** Görsel/Video zorunludur.\n\n**Sorununuzla ilgili butona tıklayarak işlem başlatın:**`)
             .setColor('#2ecc71')
             .setImage('https://cdn.discordapp.com/attachments/1028301267547738244/1473628348335915132/4.webp')
             .setFooter({ text: 'Asya2 - Kalite ve Güvenin Adresi' });
@@ -112,9 +130,8 @@ client.on('messageCreate', async (message) => {
     }
 });
 
-// --- ETKİLEŞİMLER ---
+// --- ETKİLEŞİMLER (BUTON & MODAL) ---
 client.on('interactionCreate', async (interaction) => {
-    // Ortak Kanal Oluşturma Fonksiyonu
     const createChannel = async (prefix) => {
         return await interaction.guild.channels.create({
             name: `${prefix}-${interaction.user.username}`,
@@ -127,49 +144,27 @@ client.on('interactionCreate', async (interaction) => {
     };
 
     if (interaction.isButton()) {
-        if (interaction.customId === 'ticket_bug') {
-            const channel = await createChannel('bug');
-            const embed = new EmbedBuilder().setTitle('🐛 Hata & Bug Bildirimi').setDescription('Lütfen hatayı detaylıca anlatın ve varsa görsel ekleyin.').setColor('#e74c3c');
-            const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('ticket_kapat').setLabel('Kapat').setStyle(ButtonStyle.Danger));
-            await channel.send({ content: `${interaction.user} | Destek ekibi inceliyor.`, embeds: [embed], components: [row] });
-            return await interaction.reply({ content: `Hata bildirim kanalı açıldı: ${channel}`, ephemeral: true });
-        }
-
-        if (interaction.customId === 'ticket_sikayet') {
-            const channel = await createChannel('sikayet');
-            const embed = new EmbedBuilder().setTitle('⚖️ Küfür & Şikayet').setDescription('Şikayetçi olduğunuz kişiyi ve kanıtınızı buraya bırakın.').setColor('#95a5a6');
-            const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('ticket_kapat').setLabel('Kapat').setStyle(ButtonStyle.Danger));
-            await channel.send({ content: `${interaction.user} | Destek ekibi inceliyor.`, embeds: [embed], components: [row] });
-            return await interaction.reply({ content: `Şikayet kanalı açıldı: ${channel}`, ephemeral: true });
-        }
-
-        if (interaction.customId === 'ticket_takim') {
-            const modal = new ModalBuilder().setCustomId('takim_formu').setTitle('Takım Başvurusu');
-            modal.addComponents(
-                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('t_isim').setLabel("İsim Soyisim?").setStyle(TextInputStyle.Short).setRequired(true)),
-                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('t_yas').setLabel("Yaş ve Şehir?").setStyle(TextInputStyle.Short).setRequired(true)),
-                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('t_saat').setLabel("Müsaitlik Durumu?").setStyle(TextInputStyle.Paragraph).setRequired(true)),
-                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('t_deneyim').setLabel("Deneyimler?").setStyle(TextInputStyle.Paragraph).setRequired(true)),
-                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('t_neden').setLabel("Neden Biz?").setStyle(TextInputStyle.Paragraph).setRequired(true))
-            );
-            return await interaction.showModal(modal);
-        }
-
-        if (interaction.customId === 'ticket_partner') {
-            const modal = new ModalBuilder().setCustomId('partner_formu').setTitle('Partnerlik Başvurusu');
-            modal.addComponents(
-                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('p_platform').setLabel("Platform?").setStyle(TextInputStyle.Short).setRequired(true)),
-                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('p_link').setLabel("Link?").setStyle(TextInputStyle.Short).setRequired(true)),
-                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('p_gunler').setLabel("İçerik Günleri?").setStyle(TextInputStyle.Paragraph).setRequired(true)),
-                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('p_saat').setLabel("Günlük Saat?").setStyle(TextInputStyle.Short).setRequired(true)),
-                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('p_katki').setLabel("Katkı?").setStyle(TextInputStyle.Paragraph).setRequired(true))
-            );
-            return await interaction.showModal(modal);
-        }
-
         if (interaction.customId === 'ticket_kapat') {
             await interaction.reply('Kanal 2 saniye içinde siliniyor...');
-            setTimeout(() => interaction.channel.delete().catch(() => {}), 2000);
+            return setTimeout(() => interaction.channel.delete().catch(() => {}), 2000);
+        }
+
+        if (interaction.customId === 'ticket_bug' || interaction.customId === 'ticket_sikayet') {
+            const channel = await createChannel(interaction.customId.split('_')[1]);
+            const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('ticket_kapat').setLabel('Kapat').setStyle(ButtonStyle.Danger));
+            await channel.send({ content: `${interaction.user} Hoş geldin, yetkililer gelene kadar sorununu yazabilirsin.`, components: [row] });
+            return await interaction.reply({ content: `Kanal açıldı: ${channel}`, ephemeral: true });
+        }
+
+        if (interaction.customId === 'ticket_takim' || interaction.customId === 'ticket_partner') {
+            const isTakim = interaction.customId === 'ticket_takim';
+            const modal = new ModalBuilder().setCustomId(isTakim ? 'takim_formu' : 'partner_formu').setTitle(isTakim ? 'Takım Başvurusu' : 'Partnerlik Başvurusu');
+            modal.addComponents(
+                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('f1').setLabel(isTakim ? "İsim Soyisim?" : "Platform?").setStyle(TextInputStyle.Short).setRequired(true)),
+                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('f2').setLabel(isTakim ? "Yaş ve Şehir?" : "Link?").setStyle(TextInputStyle.Short).setRequired(true)),
+                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('f3').setLabel("Deneyim / Detaylar?").setStyle(TextInputStyle.Paragraph).setRequired(true))
+            );
+            return await interaction.showModal(modal);
         }
     }
 
