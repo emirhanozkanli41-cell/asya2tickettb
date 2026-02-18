@@ -30,7 +30,7 @@ const YETKILI_ROLLER = [
 ];
 
 const HOS_GELDIN_KANAL_ID = '1472014377065517146'; 
-const LEVEL_LOG_KANAL_ID = '1473737627743289404'; // Yeni log kanalı ayarlandı
+const LEVEL_LOG_KANAL_ID = '1473737627743289404'; // Seviye log kanalı
 const GIF_URL = 'https://cdn.discordapp.com/attachments/1028301267547738244/1473632788745027585/680x240DiscordUstProfil.gif';
 
 const HIZLI_LINKLER = {
@@ -41,6 +41,7 @@ const HIZLI_LINKLER = {
 
 const userXP = new Map();
 const activeTickets = new Set(); 
+let rankSistemiAktif = true; // Rank sistemini kontrol eden anahtar
 
 client.once('ready', () => {
     console.log(`🛡️ ${client.user.tag} aktif!`);
@@ -70,6 +71,21 @@ client.on('messageCreate', async (message) => {
     const content = message.content.toLowerCase().trim();
     const args = message.content.split(' ');
 
+    // --- RANK SİSTEMİ KONTROL KOMUTU ---
+    if (content.startsWith('!rank-sistem')) {
+        if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return message.reply("❌ Bu ayarı sadece yöneticiler yapabilir.");
+        const secim = args[1];
+        if (secim === 'aç') {
+            rankSistemiAktif = true;
+            return message.reply("✅ **Rank ve XP sistemi aktif edildi.**");
+        } else if (secim === 'kapat') {
+            rankSistemiAktif = false;
+            return message.reply("⚠️ **Rank ve XP sistemi kapatıldı.** Artık XP kazanılmayacak.");
+        } else {
+            return message.reply("⚠️ Kullanım: `!rank-sistem aç` veya `!rank-sistem kapat`.");
+        }
+    }
+
     // --- TEMİZLE KOMUTU ---
     if (content.startsWith('!temizle')) {
         if (!message.member.permissions.has(PermissionsBitField.Flags.ManageMessages)) return message.reply("❌ Yetkin yok.");
@@ -87,27 +103,31 @@ client.on('messageCreate', async (message) => {
     // --- HIZLI LİNKLER ---
     if (HIZLI_LINKLER[content]) return message.reply(`🔗 **Asya2 Bağlantısı:** ${HIZLI_LINKLER[content]}`);
 
-    // --- XP & SEVİYE SİSTEMİ ---
-    let userData = userXP.get(message.author.id) || { xp: 0, level: 1 };
-    userData.xp += Math.floor(Math.random() * 10) + 5;
-    let nextLevelXP = userData.level * 150;
+    // --- XP & SEVİYE SİSTEMİ (AÇIKSA ÇALIŞIR) ---
+    if (rankSistemiAktif) {
+        let userData = userXP.get(message.author.id) || { xp: 0, level: 1 };
+        userData.xp += Math.floor(Math.random() * 10) + 5;
+        let nextLevelXP = userData.level * 150;
 
-    if (userData.xp >= nextLevelXP) {
-        userData.level++;
-        userData.xp = 0;
-        const logKanal = message.guild.channels.cache.get(LEVEL_LOG_KANAL_ID);
-        if (logKanal) {
-            const levelEmbed = new EmbedBuilder()
-                .setTitle('🚀 Asya2 Seviye Atlandı!')
-                .setDescription(`Tebrikler ${message.author}! Krallıkta rütben yükseldi.\n\n**Yeni Seviyen:** \` ${userData.level} \``)
-                .setColor('#2ecc71').setImage(GIF_URL);
-            logKanal.send({ content: `${message.author} seviye atladı!`, embeds: [levelEmbed] });
+        if (userData.xp >= nextLevelXP) {
+            userData.level++;
+            userData.xp = 0;
+            const logKanal = message.guild.channels.cache.get(LEVEL_LOG_KANAL_ID);
+            if (logKanal) {
+                const levelEmbed = new EmbedBuilder()
+                    .setTitle('🚀 Asya2 Seviye Atlandı!')
+                    .setDescription(`Tebrikler ${message.author}! Krallıkta rütben yükseldi.\n\n**Yeni Seviyen:** \` ${userData.level} \``)
+                    .setColor('#2ecc71').setImage(GIF_URL);
+                logKanal.send({ content: `${message.author} seviye atladı!`, embeds: [levelEmbed] });
+            }
         }
+        userXP.set(message.author.id, userData);
     }
-    userXP.set(message.author.id, userData);
 
     // --- !RANK KOMUTU ---
     if (content === '!rank' || content === '!level') {
+        if (!rankSistemiAktif) return message.reply("⚠️ Rank sistemi şu an kapalı.");
+        let userData = userXP.get(message.author.id) || { xp: 0, level: 1 };
         const currentNextXP = userData.level * 150;
         const progress = Math.min(Math.floor((userData.xp / currentNextXP) * 10), 10);
         const bar = "🟩".repeat(progress) + "⬜".repeat(10 - progress);
@@ -148,7 +168,7 @@ client.on('interactionCreate', async (interaction) => {
             if (activeTickets.has(interaction.user.id)) return interaction.reply({ content: "⚠️ Açık biletin var!", ephemeral: true });
 
             if (interaction.customId === 'ticket_takim') {
-                const modal = new ModalBuilder().setCustomId('takim_formu').setTitle('Please answer the question below.');
+                const modal = new ModalBuilder().setCustomId('takim_formu').setTitle('Başvuru Formu');
                 modal.addComponents(
                     new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('q1').setLabel("İsim ve Soy isminiz nedir ?").setStyle(TextInputStyle.Short).setRequired(true)),
                     new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('q2').setLabel("Kaç Yaşındasınız ve Nerede Yaşıyorsunuz ?").setStyle(TextInputStyle.Short).setRequired(true)),
@@ -160,7 +180,7 @@ client.on('interactionCreate', async (interaction) => {
             }
 
             if (interaction.customId === 'ticket_partner') {
-                const modal = new ModalBuilder().setCustomId('partner_formu').setTitle('Please answer the question below.');
+                const modal = new ModalBuilder().setCustomId('partner_formu').setTitle('Partnerlik Formu');
                 modal.addComponents(
                     new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('p1').setLabel("Hangi Platformda İçerik Üretiyorsunuz ?").setStyle(TextInputStyle.Short).setRequired(true)),
                     new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('p2').setLabel("Kanal Linkiniz").setStyle(TextInputStyle.Short).setRequired(true)),
@@ -182,8 +202,18 @@ client.on('interactionCreate', async (interaction) => {
                     ...YETKILI_ROLLER.map(r => ({ id: r, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }))
                 ]
             });
-            const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`close_${interaction.user.id}`).setLabel('Kapat').setStyle(ButtonStyle.Danger));
-            await channel.send({ content: `⚔️ **Asya2 Destek** | Hoş geldin ${interaction.user}.`, components: [row] });
+
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`close_${interaction.user.id}`).setLabel('Kapat').setStyle(ButtonStyle.Danger)
+            );
+
+            const ticketEmbed = new EmbedBuilder()
+                .setTitle('⚔️ Asya2 Destek')
+                .setDescription(`Hoş geldin ${interaction.user}, talebiniz ilgili birime iletildi.`)
+                .setColor('#f1c40f')
+                .setImage(GIF_URL); 
+
+            await channel.send({ embeds: [ticketEmbed], components: [row] });
             return interaction.reply({ content: `Bilet açıldı: ${channel}`, ephemeral: true });
         }
     }
@@ -201,7 +231,11 @@ client.on('interactionCreate', async (interaction) => {
             ]
         });
 
-        const logEmbed = new EmbedBuilder().setColor('#f1c40f').setTitle(isTakim ? '🤝 Yeni Takım Başvurusu' : '💎 Yeni Partnerlik Başvurusu');
+        const logEmbed = new EmbedBuilder()
+            .setColor('#f1c40f')
+            .setTitle(isTakim ? '🤝 Yeni Takım Başvurusu' : '💎 Yeni Partnerlik Başvurusu')
+            .setImage(GIF_URL);
+
         if (isTakim) {
             logEmbed.addFields(
                 { name: 'İsim Soyisim', value: interaction.fields.getTextInputValue('q1') },
