@@ -34,12 +34,12 @@ client.once('ready', () => {
     client.user.setActivity('Asya2', { type: 0 });
 });
 
-// --- MESAJ OLAYLARI (XP & KOMUTLAR) ---
+// --- MESAJ OLAYLARI (XP & TICKET KUR) ---
 client.on('messageCreate', async (message) => {
     if (message.author.bot || !message.guild) return;
     const content = message.content.toLowerCase().trim();
 
-    // XP Sistemi
+    // XP Sistemi (Log Kanalına Gider)
     let userData = userXP.get(message.author.id) || { xp: 0, level: 1 };
     userData.xp += Math.floor(Math.random() * 10) + 5;
     if (userData.xp >= userData.level * 150) {
@@ -52,11 +52,11 @@ client.on('messageCreate', async (message) => {
     }
     userXP.set(message.author.id, userData);
 
-    // Ticket Kurulum
+    // Ticket Kurulum Komutu
     if (content === '!ticket-kur' && message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
         const embed = new EmbedBuilder()
-            .setTitle('🎫 Asya2 Destek Sistemi')
-            .setDescription(`Sorununuzla ilgili butona tıklayın.\n\n⚠️ **Not:** Aynı anda sadece 1 bilet açabilirsiniz.`)
+            .setTitle('🎫 Asya2 Destek & Başvuru Sistemi')
+            .setDescription(`İşlem yapmak için aşağıdaki butonları kullanın.\n\n⚠️ **Dikkat:** Aynı anda sadece 1 aktif biletiniz olabilir.`)
             .setColor('#2ecc71').setImage(GIF_URL);
         const row1 = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId('ticket_bug').setLabel('Hata & Bug').setStyle(ButtonStyle.Danger),
@@ -70,24 +70,25 @@ client.on('messageCreate', async (message) => {
     }
 });
 
-// --- ETKİLEŞİMLER (MODAL & SPAM KONTROL) ---
+// --- ETKİLEŞİMLER (MODALLAR & KANAL AÇMA) ---
 client.on('interactionCreate', async (interaction) => {
     if (interaction.isButton()) {
+        // Kanal Kapatma
         if (interaction.customId.startsWith('close_')) {
             activeTickets.delete(interaction.customId.split('_')[1]);
             await interaction.reply('Kanal siliniyor...');
             return setTimeout(() => interaction.channel.delete().catch(() => {}), 2000);
         }
 
+        // Bilet/Başvuru Açma Sınırı
         if (interaction.customId.startsWith('ticket_')) {
             if (activeTickets.has(interaction.user.id)) {
-                return interaction.reply({ content: "⚠️ Zaten açık bir biletin var!", ephemeral: true });
+                return interaction.reply({ content: "⚠️ Zaten açık bir talebin var! Onu kapatmadan yenisini açamazsın.", ephemeral: true });
             }
 
-            // RESİMDEKİ TAKIM BAŞVURU FORMU
+            // TAKIM BAŞVURU MODALI (1. Resim)
             if (interaction.customId === 'ticket_takim') {
                 const modal = new ModalBuilder().setCustomId('takim_formu').setTitle('Please answer the question below.');
-                
                 modal.addComponents(
                     new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('q1').setLabel("İsim ve Soy isminiz nedir ?").setStyle(TextInputStyle.Short).setRequired(true)),
                     new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('q2').setLabel("Kaç Yaşındasınız ve Nerede Yaşıyorsunuz ?").setStyle(TextInputStyle.Short).setRequired(true)),
@@ -98,54 +99,20 @@ client.on('interactionCreate', async (interaction) => {
                 return await interaction.showModal(modal);
             }
 
-            // Diğer bilet türleri (Bug/Şikayet)
+            // PARTNERLİK BAŞVURU MODALI (2. Resim)
+            if (interaction.customId === 'ticket_partner') {
+                const modal = new ModalBuilder().setCustomId('partner_formu').setTitle('Please answer the question below.');
+                modal.addComponents(
+                    new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('p1').setLabel("Hangi Platformda İçerik Üretiyorsunuz ?").setStyle(TextInputStyle.Short).setRequired(true)),
+                    new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('p2').setLabel("Kanal Linkiniz").setStyle(TextInputStyle.Short).setRequired(true)),
+                    new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('p3').setLabel("Hangi Günler İçerik Üretmektesiniz ?").setStyle(TextInputStyle.Paragraph).setRequired(true)),
+                    new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('p4').setLabel("Günlük Kaç Saat İçerik Üretmektesiniz ?").setStyle(TextInputStyle.Short).setRequired(true)),
+                    new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('p5').setLabel("Bizlere Nasıl Bir Katkıda Bulunabilirsiniz ?").setStyle(TextInputStyle.Paragraph).setRequired(true))
+                );
+                return await interaction.showModal(modal);
+            }
+
+            // Standart Biletler (Bug/Şikayet)
             activeTickets.add(interaction.user.id);
-            const channel = await interaction.guild.channels.create({
-                name: `destek-${interaction.user.username}`,
-                type: ChannelType.GuildText,
-                permissionOverwrites: [
-                    { id: interaction.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-                    { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
-                    ...YETKILI_ROLLER.map(r => ({ id: r, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }))
-                ]
-            });
-            const closeRow = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`close_${interaction.user.id}`).setLabel('Kapat').setStyle(ButtonStyle.Danger));
-            await channel.send({ content: `${interaction.user} Hoş geldin.`, components: [closeRow] });
-            return interaction.reply({ content: `Bilet açıldı: ${channel}`, ephemeral: true });
-        }
-    }
-
-    // Modal Formu Gönderildiğinde
-    if (interaction.type === InteractionType.ModalSubmit && interaction.customId === 'takim_formu') {
-        activeTickets.add(interaction.user.id);
-        const q1 = interaction.fields.getTextInputValue('q1');
-        const q2 = interaction.fields.getTextInputValue('q2');
-        
-        const channel = await interaction.guild.channels.create({
-            name: `başvuru-${interaction.user.username}`,
-            type: ChannelType.GuildText,
-            permissionOverwrites: [
-                { id: interaction.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-                { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
-                ...YETKILI_ROLLER.map(r => ({ id: r, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }))
-            ]
-        });
-
-        const logEmbed = new EmbedBuilder()
-            .setTitle('🤝 Yeni Takım Başvurusu')
-            .addFields(
-                { name: 'İsim Soyisim', value: q1 },
-                { name: 'Yaş/Şehir', value: q2 },
-                { name: 'Müsaitlik', value: interaction.fields.getTextInputValue('q3') },
-                { name: 'Deneyimler', value: interaction.fields.getTextInputValue('q4') },
-                { name: 'Neden Biz?', value: interaction.fields.getTextInputValue('q5') }
-            )
-            .setColor('#5865F2').setFooter({ text: `Başvuran: ${interaction.user.tag}` });
-
-        const closeRow = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`close_${interaction.user.id}`).setLabel('Kapat').setStyle(ButtonStyle.Danger));
-        await channel.send({ content: `🔔 **Yeni Başvuru Geldi!**`, embeds: [logEmbed], components: [closeRow] });
-        await interaction.reply({ content: `✅ Başvurunuz başarıyla iletildi! Kanalınız: ${channel}`, ephemeral: true });
-    }
-});
-
-client.login(TOKEN);
+            const type = interaction.customId.split('_')[1];
+            const channel =
