@@ -5,8 +5,7 @@ app.listen(process.env.PORT || 3000);
 
 const { 
     Client, GatewayIntentBits, ActionRowBuilder, ButtonBuilder, 
-    ButtonStyle, EmbedBuilder, PermissionsBitField, ChannelType,
-    ModalBuilder, TextInputBuilder, TextInputStyle, InteractionType 
+    ButtonStyle, EmbedBuilder, PermissionsBitField, ChannelType 
 } = require('discord.js');
 
 const client = new Client({
@@ -34,7 +33,7 @@ client.once('ready', () => {
     console.log(`🛡️ ${client.user.tag} mermi gibi hazır!`);
 });
 
-// --- HOŞ GELDİN SİSTEMİ ---
+// --- 1. HOŞ GELDİN SİSTEMİ ---
 client.on('guildMemberAdd', async (member) => {
     try {
         const kanal = member.guild.channels.cache.get(HOS_GELDIN_KANAL_ID);
@@ -43,15 +42,19 @@ client.on('guildMemberAdd', async (member) => {
             .setTitle('🛡️ Asya2 Krallığına Hoş Geldin!')
             .setDescription(`Selam ${member}! Sunucumuza hoş geldin, seninle daha güçlüyüz!`)
             .setImage('https://cdn.discordapp.com/attachments/1028301267547738244/1473632788745027585/680x240DiscordUstProfil.gif')
-            .setColor('#f1c40f');
+            .setColor('#f1c40f')
+            .setFooter({ text: `Üye Sayısı: ${member.guild.memberCount}` });
         kanal.send({ content: `Hoş geldin ${member}! ⚔️`, embeds: [welcomeEmbed] });
     } catch (err) { console.log("Hoş geldin hatası: " + err) }
 });
 
+// --- 2. MESAJ KOMUTLARI (RANK & LİNK & TİCKET KUR) ---
 client.on('messageCreate', async (message) => {
     if (message.author.bot || !message.guild) return;
 
     const content = message.content.toLowerCase();
+
+    // Hızlı Linkler
     if (HIZLI_LINKLER[content]) {
         const linkEmbed = new EmbedBuilder()
             .setTitle('🔗 Asya2 Hızlı Erişim')
@@ -60,8 +63,17 @@ client.on('messageCreate', async (message) => {
         return message.reply({ embeds: [linkEmbed] });
     }
 
+    // Rank Sistemi (XP Kazanma)
+    let userData = userXP.get(message.author.id) || { xp: 0, level: 1 };
+    userData.xp += Math.floor(Math.random() * 10) + 5;
+    if (userData.xp >= userData.level * 150) {
+        userData.level++;
+        userData.xp = 0;
+        message.reply(`🚀 **Tebrikler!** Seviye atladın: **${userData.level}**`);
+    }
+    userXP.set(message.author.id, userData);
+
     if (message.content === '!rank' || message.content === '!level') {
-        let userData = userXP.get(message.author.id) || { xp: 0, level: 1 };
         const rankEmbed = new EmbedBuilder()
             .setAuthor({ name: `🛡️ ASYA2 RANK`, iconURL: client.user.displayAvatarURL() })
             .setTitle(`${message.author.username} Profil Bilgisi`)
@@ -71,13 +83,11 @@ client.on('messageCreate', async (message) => {
         return message.channel.send({ embeds: [rankEmbed] });
     }
 
+    // Ticket Paneli Kurma (Hatasız Emoji Formatı)
     if (message.content === '!ticket-kur' && message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
         const embed = new EmbedBuilder()
             .setTitle('🎫 Asya2 Destek Sistemi Kuralları')
-            .setDescription(`Destek talebi oluşturmadan önce lütfen aşağıdaki kuralları okuyunuz.\n\n` +
-                            `⚠️ **Gereksiz Talep Oluşturma:** Sohbet amaçlı talepler kapatılır.\n\n` +
-                            `⏳ **Sabırlı Olun:** Yetkililer en kısa sürede dönüş yapacaktır.\n\n` +
-                            `⚖️ **Üslup ve Saygı:** Küfür/Hakaret ban sebebidir.`)
+            .setDescription(`⚠️ **Gereksiz Talep Oluşturma:** Sohbet amaçlı talepler kapatılır.\n\n⏳ **Sabırlı Olun:** Yetkililer en kısa sürede dönüş sağlayacaktır.\n\n⚖️ **Üslup ve Saygı:** Küfür/Hakaret ban sebebidir.`)
             .setColor('#2ecc71')
             .setImage('https://cdn.discordapp.com/attachments/1028301267547738244/1473628348335915132/4.webp');
 
@@ -95,31 +105,36 @@ client.on('messageCreate', async (message) => {
     }
 });
 
-// Hataları yakalamak için boş bir etkileşim dinleyici ekleyelim
+// --- 3. ETKİLEŞİMLER (BUTONLAR) ---
 client.on('interactionCreate', async (interaction) => {
+    if (!interaction.isButton()) return;
+
+    if (interaction.customId === 'ticket_kapat') {
+        await interaction.reply('Kanal siliniyor...');
+        return setTimeout(() => interaction.channel.delete().catch(() => {}), 2000);
+    }
+
     try {
-        if (interaction.isButton()) {
-            if (interaction.customId === 'ticket_kapat') {
-                await interaction.reply('Kanal siliniyor...');
-                return setTimeout(() => interaction.channel.delete().catch(() => {}), 2000);
-            }
-            
-            // Kanal oluşturma işlemi
-            const channel = await interaction.guild.channels.create({
-                name: `destek-${interaction.user.username}`,
-                type: ChannelType.GuildText,
-                permissionOverwrites: [
-                    { id: interaction.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-                    { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
-                ],
-            });
-            
-            await interaction.reply({ content: `Kanal açıldı: ${channel}`, ephemeral: true });
-            await channel.send({ content: `Hoş geldin ${interaction.user}! Yetkililer birazdan burada olacak.`, 
-                components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('ticket_kapat').setLabel('Kapat').setStyle(ButtonStyle.Danger))] 
-            });
-        }
+        const channel = await interaction.guild.channels.create({
+            name: `destek-${interaction.user.username}`,
+            type: ChannelType.GuildText,
+            permissionOverwrites: [
+                { id: interaction.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
+                { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
+            ],
+        });
+
+        await interaction.reply({ content: `Kanal açıldı: ${channel}`, ephemeral: true });
+
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('ticket_kapat').setLabel('Talebi Kapat').setStyle(ButtonStyle.Danger)
+        );
+
+        await channel.send({ 
+            content: `Hoş geldin ${interaction.user}! Sorununu yaz, yetkililer ilgilenecek.`,
+            components: [row] 
+        });
     } catch (e) { console.log(e) }
 });
 
-client.login(TOKEN).catch(err => console.log("Token Hatası: " + err));
+client.login(TOKEN);
