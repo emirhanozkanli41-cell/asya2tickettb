@@ -29,8 +29,16 @@ const YETKILI_ROLLER = [
     '1000461569139941507'  // Game Master
 ];
 
+// --- KARAKTER ROL IDLERI ---
+const KARAKTER_ROLLER = {
+    'rol_savasci': '1473750606161248480',
+    'rol_ninja': '1473750645906341908',
+    'rol_saman': '1473750696649297981',
+    'rol_sura': '1473750745361944802'
+};
+
 const HOS_GELDIN_KANAL_ID = '1472014377065517146'; 
-const LEVEL_LOG_KANAL_ID = '1473737627743289404'; // Seviye log kanalı
+const LEVEL_LOG_KANAL_ID = '1473737627743289404'; 
 const GIF_URL = 'https://cdn.discordapp.com/attachments/1028301267547738244/1473632788745027585/680x240DiscordUstProfil.gif';
 
 const HIZLI_LINKLER = {
@@ -41,7 +49,7 @@ const HIZLI_LINKLER = {
 
 const userXP = new Map();
 const activeTickets = new Set(); 
-let rankSistemiAktif = true; // Rank sistemini kontrol eden anahtar
+let rankSistemiAktif = true;
 
 client.once('ready', () => {
     console.log(`🛡️ ${client.user.tag} aktif!`);
@@ -71,39 +79,54 @@ client.on('messageCreate', async (message) => {
     const content = message.content.toLowerCase().trim();
     const args = message.content.split(' ');
 
+    // --- !ROL-KUR KOMUTU (Yeni Oda İçin) ---
+    if (content === '!rol-kur') {
+        if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return message.reply("❌ Yetkin yok kanka.");
+        
+        const embed = new EmbedBuilder()
+            .setTitle('⚔️ Asya2 Karakter Sınıfı Seçimi')
+            .setDescription('Krallıktaki sınıfını seçmek ve profilinde göstermek için aşağıdaki butonlara tıkla!\n\n🛡️ **Savaşçı**\n🏹 **Ninja**\n🔥 **Sura**\n✨ **Şaman**')
+            .setColor('#2f3136')
+            .setImage(GIF_URL);
+
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('rol_savasci').setLabel('Savaşçı').setStyle(ButtonStyle.Secondary).setEmoji('🛡️'),
+            new ButtonBuilder().setCustomId('rol_ninja').setLabel('Ninja').setStyle(ButtonStyle.Success).setEmoji('🏹'),
+            new ButtonBuilder().setCustomId('rol_sura').setLabel('Sura').setStyle(ButtonStyle.Danger).setEmoji('🔥'),
+            new ButtonBuilder().setCustomId('rol_saman').setLabel('Şaman').setStyle(ButtonStyle.Primary).setEmoji('✨')
+        );
+
+        return message.channel.send({ embeds: [embed], components: [row] });
+    }
+
     // --- RANK SİSTEMİ KONTROL KOMUTU ---
     if (content.startsWith('!rank-sistem')) {
-        if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return message.reply("❌ Bu ayarı sadece yöneticiler yapabilir.");
+        if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return message.reply("❌ Yetkin yok.");
         const secim = args[1];
         if (secim === 'aç') {
             rankSistemiAktif = true;
             return message.reply("✅ **Rank ve XP sistemi aktif edildi.**");
         } else if (secim === 'kapat') {
             rankSistemiAktif = false;
-            return message.reply("⚠️ **Rank ve XP sistemi kapatıldı.** Artık XP kazanılmayacak.");
-        } else {
-            return message.reply("⚠️ Kullanım: `!rank-sistem aç` veya `!rank-sistem kapat`.");
+            return message.reply("⚠️ **Rank ve XP sistemi kapatıldı.**");
         }
     }
 
     // --- TEMİZLE KOMUTU ---
     if (content.startsWith('!temizle')) {
-        if (!message.member.permissions.has(PermissionsBitField.Flags.ManageMessages)) return message.reply("❌ Yetkin yok.");
+        if (!message.member.permissions.has(PermissionsBitField.Flags.ManageMessages)) return;
         const miktar = parseInt(args[1]);
         if (isNaN(miktar) || miktar < 1 || miktar > 100) return message.reply("⚠️ 1-100 arası bir sayı gir.");
-        
         try {
             await message.channel.bulkDelete(miktar + 1, true);
-            const msg = await message.channel.send(`✅ **${miktar}** mesaj temizlendi.`);
-            setTimeout(() => msg.delete(), 3000);
-        } catch (err) { message.reply("❌ Eski mesajları silemiyorum."); }
+        } catch (err) { console.log(err) }
         return;
     }
 
     // --- HIZLI LİNKLER ---
     if (HIZLI_LINKLER[content]) return message.reply(`🔗 **Asya2 Bağlantısı:** ${HIZLI_LINKLER[content]}`);
 
-    // --- XP & SEVİYE SİSTEMİ (AÇIKSA ÇALIŞIR) ---
+    // --- XP & SEVİYE SİSTEMİ ---
     if (rankSistemiAktif) {
         let userData = userXP.get(message.author.id) || { xp: 0, level: 1 };
         userData.xp += Math.floor(Math.random() * 10) + 5;
@@ -158,12 +181,29 @@ client.on('messageCreate', async (message) => {
 
 client.on('interactionCreate', async (interaction) => {
     if (interaction.isButton()) {
+        // --- KARAKTER ROL VERME SİSTEMİ ---
+        if (interaction.customId.startsWith('rol_')) {
+            const roleId = KARAKTER_ROLLER[interaction.customId];
+            const role = interaction.guild.roles.cache.get(roleId);
+            if (!role) return interaction.reply({ content: "❌ Rol bulunamadı!", ephemeral: true });
+
+            if (interaction.member.roles.cache.has(roleId)) {
+                await interaction.member.roles.remove(roleId);
+                return interaction.reply({ content: `🛡️ **${role.name}** sınıfı profilinden kaldırıldı.`, ephemeral: true });
+            } else {
+                await interaction.member.roles.add(roleId);
+                return interaction.reply({ content: `⚔️ Tebrikler! Artık bir **${role.name}** olarak krallıkta yerini aldın!`, ephemeral: true });
+            }
+        }
+
+        // --- BİLET KAPATMA ---
         if (interaction.customId.startsWith('close_')) {
             activeTickets.delete(interaction.customId.split('_')[1]);
             await interaction.reply('Kanal siliniyor...');
             return setTimeout(() => interaction.channel.delete().catch(() => {}), 2000);
         }
 
+        // --- BİLET AÇMA ---
         if (interaction.customId.startsWith('ticket_')) {
             if (activeTickets.has(interaction.user.id)) return interaction.reply({ content: "⚠️ Açık biletin var!", ephemeral: true });
 
@@ -203,15 +243,8 @@ client.on('interactionCreate', async (interaction) => {
                 ]
             });
 
-            const row = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId(`close_${interaction.user.id}`).setLabel('Kapat').setStyle(ButtonStyle.Danger)
-            );
-
-            const ticketEmbed = new EmbedBuilder()
-                .setTitle('⚔️ Asya2 Destek')
-                .setDescription(`Hoş geldin ${interaction.user}, talebiniz ilgili birime iletildi.`)
-                .setColor('#f1c40f')
-                .setImage(GIF_URL); 
+            const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`close_${interaction.user.id}`).setLabel('Kapat').setStyle(ButtonStyle.Danger));
+            const ticketEmbed = new EmbedBuilder().setTitle('⚔️ Asya2 Destek').setDescription(`Hoş geldin ${interaction.user}, talebiniz iletildi.`).setColor('#f1c40f').setImage(GIF_URL);
 
             await channel.send({ embeds: [ticketEmbed], components: [row] });
             return interaction.reply({ content: `Bilet açıldı: ${channel}`, ephemeral: true });
