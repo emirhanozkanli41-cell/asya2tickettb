@@ -243,4 +243,3 @@ client.on('interactionCreate', async (interaction) => {
 });
 
 client.login(TOKEN);
-
