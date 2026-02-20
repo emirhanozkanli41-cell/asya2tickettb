@@ -6,7 +6,8 @@ app.listen(process.env.PORT || 3000);
 const { 
     Client, GatewayIntentBits, ActionRowBuilder, ButtonBuilder, 
     ButtonStyle, EmbedBuilder, PermissionsBitField, ChannelType,
-    ModalBuilder, TextInputBuilder, TextInputStyle, InteractionType 
+    ModalBuilder, TextInputBuilder, TextInputStyle, InteractionType,
+    ActivityType 
 } = require('discord.js');
 
 const client = new Client({
@@ -14,7 +15,8 @@ const client = new Client({
         GatewayIntentBits.Guilds, 
         GatewayIntentBits.GuildMessages, 
         GatewayIntentBits.MessageContent,
-        GatewayIntentBits.GuildMembers
+        GatewayIntentBits.GuildMembers,
+        GatewayIntentBits.GuildPresences // Profil güncellemeleri için önemli
     ]
 });
 
@@ -26,7 +28,6 @@ const YETKILI_ROLLER = [
     '1000461367054188625', '1000461569139941507'
 ];
 
-// --- KARAKTER & KRALLIK ROLLERI ---
 const KARAKTER_ROLLER = {
     'rol_savasci': '1473750606161248480',
     'rol_ninja': '1473750645906341908',
@@ -35,9 +36,9 @@ const KARAKTER_ROLLER = {
 };
 
 const KRALLIK_ROLLER = {
-    'bayrak_kirmizi': '1473752790458171568', // Shinsoo
-    'bayrak_sari': '1473752888546164897',    // Chunjo
-    'bayrak_mavi': '1473752930246070282'     // Jinno
+    'bayrak_kirmizi': '1473752790458171568', 
+    'bayrak_sari': '1473752888546164897',    
+    'bayrak_mavi': '1473752930246070282'     
 };
 
 const HOS_GELDIN_KANAL_ID = '1472014377065517146'; 
@@ -54,9 +55,22 @@ const userXP = new Map();
 const activeTickets = new Set(); 
 let rankSistemiAktif = true;
 
+// --- BOT HAZIR OLDUĞUNDA (RPC BURADA) ---
 client.once('ready', () => {
     console.log(`🛡️ ${client.user.tag} aktif!`);
-    client.user.setActivity('Asya2', { type: 0 });
+    
+    // Asya2 RPC Ayarı
+    client.user.setPresence({
+        activities: [{ 
+            name: 'Asya2', 
+            type: ActivityType.Playing, // "Asya2 Oynuyor"
+            // Not: Logo için Developer Portal'daki "Rich Presence" kısmına 
+            // resmi yükleyip ismini 'asya2_logo' yapman lazım.
+            details: '🛡️ Ejderhalarla Savaşta!',
+            state: '⚔️ Yeni Maceraya Hazırlanıyor'
+        }],
+        status: 'online',
+    });
 });
 
 // --- HOŞ GELDİN SİSTEMİ ---
@@ -148,7 +162,6 @@ client.on('messageCreate', async (message) => {
 
 client.on('interactionCreate', async (interaction) => {
     if (interaction.isButton()) {
-        // --- TEK KRALLIK KONTROLÜ ---
         if (interaction.customId.startsWith('bayrak_')) {
             const roleId = KRALLIK_ROLLER[interaction.customId];
             if (interaction.member.roles.cache.has(roleId)) return interaction.reply({ content: "⚠️ Zaten bu krallıktasın!", ephemeral: true });
@@ -157,7 +170,6 @@ client.on('interactionCreate', async (interaction) => {
             return interaction.reply({ content: "🚩 Krallığın başarıyla güncellendi!", ephemeral: true });
         }
 
-        // --- TEK KARAKTER KONTROLÜ ---
         if (interaction.customId.startsWith('rol_')) {
             const roleId = KARAKTER_ROLLER[interaction.customId];
             if (interaction.member.roles.cache.has(roleId)) return interaction.reply({ content: "⚠️ Zaten bu sınıftasın!", ephemeral: true });
