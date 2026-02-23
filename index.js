@@ -6,7 +6,8 @@ app.listen(process.env.PORT || 3000);
 const { 
     Client, GatewayIntentBits, ActionRowBuilder, ButtonBuilder, 
     ButtonStyle, EmbedBuilder, PermissionsBitField, ChannelType,
-    ModalBuilder, TextInputBuilder, TextInputStyle, InteractionType 
+    ModalBuilder, TextInputBuilder, TextInputStyle, InteractionType,
+    ActivityType 
 } = require('discord.js');
 
 const client = new Client({
@@ -14,7 +15,9 @@ const client = new Client({
         GatewayIntentBits.Guilds, 
         GatewayIntentBits.GuildMessages, 
         GatewayIntentBits.MessageContent,
-        GatewayIntentBits.GuildMembers
+        GatewayIntentBits.GuildMembers,
+        GatewayIntentBits.GuildPresences, // <--- BOTUN YEŞİL YANMASI İÇİN BU ŞART!
+        GatewayIntentBits.GuildVoiceStates
     ]
 });
 
@@ -30,7 +33,7 @@ const YETKILI_ROLLER = [
 ];
 
 const HOS_GELDIN_KANAL_ID = '1472014377065517146'; 
-const LEVEL_LOG_KANAL_ID = '1473737627743289404'; // Seviye log kanalı
+const LEVEL_LOG_KANAL_ID = '1473737627743289404'; 
 const GIF_URL = 'https://cdn.discordapp.com/attachments/1028301267547738244/1473632788745027585/680x240DiscordUstProfil.gif';
 
 const HIZLI_LINKLER = {
@@ -41,11 +44,16 @@ const HIZLI_LINKLER = {
 
 const userXP = new Map();
 const activeTickets = new Set(); 
-let rankSistemiAktif = true; // Rank sistemini kontrol eden anahtar
+let rankSistemiAktif = true;
 
 client.once('ready', () => {
-    console.log(`🛡️ ${client.user.tag} aktif!`);
-    client.user.setActivity('Asya2', { type: 0 });
+    console.log(`🛡️ ${client.user.tag} aktif ve yeşil yanıyor!`);
+    
+    // Botun durumunu zorla "Online" ve "Asya2 Oynuyor" yapıyoruz
+    client.user.setPresence({
+        activities: [{ name: 'Asya2 Ticket', type: ActivityType.Playing }],
+        status: 'online',
+    });
 });
 
 // --- HOŞ GELDİN SİSTEMİ ---
@@ -66,12 +74,13 @@ client.on('guildMemberAdd', async (member) => {
     } catch (e) { console.log(e) }
 });
 
+// --- MESAJ KOMUTLARI & XP SİSTEMİ ---
 client.on('messageCreate', async (message) => {
     if (message.author.bot || !message.guild) return;
     const content = message.content.toLowerCase().trim();
     const args = message.content.split(' ');
 
-    // --- RANK SİSTEMİ KONTROL KOMUTU ---
+    // Rank Sistem Kontrol
     if (content.startsWith('!rank-sistem')) {
         if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return message.reply("❌ Bu ayarı sadece yöneticiler yapabilir.");
         const secim = args[1];
@@ -80,30 +89,27 @@ client.on('messageCreate', async (message) => {
             return message.reply("✅ **Rank ve XP sistemi aktif edildi.**");
         } else if (secim === 'kapat') {
             rankSistemiAktif = false;
-            return message.reply("⚠️ **Rank ve XP sistemi kapatıldı.** Artık XP kazanılmayacak.");
-        } else {
-            return message.reply("⚠️ Kullanım: `!rank-sistem aç` veya `!rank-sistem kapat`.");
+            return message.reply("⚠️ **Rank ve XP sistemi kapatıldı.**");
         }
     }
 
-    // --- TEMİZLE KOMUTU ---
+    // Temizle Komutu
     if (content.startsWith('!temizle')) {
         if (!message.member.permissions.has(PermissionsBitField.Flags.ManageMessages)) return message.reply("❌ Yetkin yok.");
         const miktar = parseInt(args[1]);
         if (isNaN(miktar) || miktar < 1 || miktar > 100) return message.reply("⚠️ 1-100 arası bir sayı gir.");
-        
         try {
             await message.channel.bulkDelete(miktar + 1, true);
             const msg = await message.channel.send(`✅ **${miktar}** mesaj temizlendi.`);
             setTimeout(() => msg.delete(), 3000);
-        } catch (err) { message.reply("❌ Eski mesajları silemiyorum."); }
+        } catch (err) { console.log(err) }
         return;
     }
 
-    // --- HIZLI LİNKLER ---
+    // Hızlı Linkler
     if (HIZLI_LINKLER[content]) return message.reply(`🔗 **Asya2 Bağlantısı:** ${HIZLI_LINKLER[content]}`);
 
-    // --- XP & SEVİYE SİSTEMİ (AÇIKSA ÇALIŞIR) ---
+    // XP & Seviye Sistemi
     if (rankSistemiAktif) {
         let userData = userXP.get(message.author.id) || { xp: 0, level: 1 };
         userData.xp += Math.floor(Math.random() * 10) + 5;
@@ -124,7 +130,7 @@ client.on('messageCreate', async (message) => {
         userXP.set(message.author.id, userData);
     }
 
-    // --- !RANK KOMUTU ---
+    // !Rank Komutu
     if (content === '!rank' || content === '!level') {
         if (!rankSistemiAktif) return message.reply("⚠️ Rank sistemi şu an kapalı.");
         let userData = userXP.get(message.author.id) || { xp: 0, level: 1 };
@@ -138,7 +144,7 @@ client.on('messageCreate', async (message) => {
         return message.channel.send({ embeds: [rankEmbed] });
     }
 
-    // --- !TICKET-KUR KOMUTU ---
+    // !Ticket-Kur
     if (content === '!ticket-kur' && message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
         const embed = new EmbedBuilder()
             .setTitle('🎫 Asya2 Destek & Başvuru')
@@ -156,6 +162,7 @@ client.on('messageCreate', async (message) => {
     }
 });
 
+// --- BUTON VE MODAL ETKİLEŞİMLERİ ---
 client.on('interactionCreate', async (interaction) => {
     if (interaction.isButton()) {
         if (interaction.customId.startsWith('close_')) {
@@ -191,6 +198,7 @@ client.on('interactionCreate', async (interaction) => {
                 return await interaction.showModal(modal);
             }
 
+            // Normal Ticket Açma
             activeTickets.add(interaction.user.id);
             const prefix = interaction.customId.split('_')[1];
             const channel = await interaction.guild.channels.create({
@@ -261,4 +269,3 @@ client.on('interactionCreate', async (interaction) => {
 });
 
 client.login(TOKEN);
-
