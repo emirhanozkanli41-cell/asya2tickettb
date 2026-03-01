@@ -1,12 +1,11 @@
 const express = require('express');
 const app = express();
 
-// Render'ın botu kapatmaması için basit bir web arayüzü
-app.get('/', (req, res) => res.send('🛡️ Asya2 Bot 7/24 Aktif!'));
-
+// Render'ın uyumaması ve port hatası vermemesi için gerekli kısım
+app.get('/', (req, res) => res.send('Asya2 Bot 7/24 Aktif!'));
 const port = process.env.PORT || 3000;
 app.listen(port, '0.0.0.0', () => {
-    console.log(`🌐 Web sunucusu ${port} portunda başlatıldı.`);
+    console.log(`🌐 Sunucu ${port} portunda başlatıldı.`);
 });
 
 const { 
@@ -24,6 +23,7 @@ const client = new Client({
     ]
 });
 
+// Render Environment Variables'dan gelen token
 const TOKEN = process.env.TOKEN;
 
 // --- AYARLAR & ROL IDLERI ---
@@ -43,7 +43,7 @@ const KARAKTER_ROLLER = {
 const KRALLIK_ROLLER = {
     'bayrak_kirmizi': '1473752790458171568', // Shinsoo
     'bayrak_sari': '1473752888546164897',    // Chunjo
-    'bayrak_mavi': '1473752930246070282'      // Jinno
+    'bayrak_mavi': '1473752930246070282'     // Jinno
 };
 
 const HOS_GELDIN_KANAL_ID = '1472014377065517146'; 
@@ -77,7 +77,7 @@ client.on('guildMemberAdd', async (member) => {
             .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
             .setFooter({ text: `Üye Sayısı: ${member.guild.memberCount}` });
         kanal.send({ content: `Hoş geldin ${member}! ⚔️`, embeds: [welcomeEmbed] });
-    } catch (e) { console.log("Hoş geldin hatası:", e) }
+    } catch (e) { console.log("Hata:", e) }
 });
 
 client.on('messageCreate', async (message) => {
@@ -135,7 +135,7 @@ client.on('messageCreate', async (message) => {
         if (miktar > 0 && miktar <= 100) {
             try {
                 await message.channel.bulkDelete(miktar + 1, true);
-            } catch (e) { console.log("Temizleme hatası:", e) }
+            } catch (e) { console.log(e) }
         }
         return;
     }
@@ -163,9 +163,8 @@ client.on('interactionCreate', async (interaction) => {
             if (interaction.customId.startsWith('bayrak_')) {
                 const roleId = KRALLIK_ROLLER[interaction.customId];
                 if (interaction.member.roles.cache.has(roleId)) return interaction.reply({ content: "⚠️ Zaten bu krallıktasın!", ephemeral: true });
-                
                 await interaction.member.roles.remove(Object.values(KRALLIK_ROLLER)).catch(() => {});
-                await interaction.member.roles.add(roleId).catch(() => {});
+                await interaction.member.roles.add(roleId);
                 return interaction.reply({ content: "🚩 Krallığın başarıyla güncellendi!", ephemeral: true });
             }
 
@@ -173,9 +172,8 @@ client.on('interactionCreate', async (interaction) => {
             if (interaction.customId.startsWith('rol_')) {
                 const roleId = KARAKTER_ROLLER[interaction.customId];
                 if (interaction.member.roles.cache.has(roleId)) return interaction.reply({ content: "⚠️ Zaten bu sınıftasın!", ephemeral: true });
-                
                 await interaction.member.roles.remove(Object.values(KARAKTER_ROLLER)).catch(() => {});
-                await interaction.member.roles.add(roleId).catch(() => {});
+                await interaction.member.roles.add(roleId);
                 return interaction.reply({ content: "⚔️ Karakter sınıfın başarıyla değiştirildi!", ephemeral: true });
             }
 
@@ -259,17 +257,12 @@ client.on('interactionCreate', async (interaction) => {
             return interaction.reply({ content: `✅ Başvurunuz iletildi: ${channel}`, ephemeral: true });
         }
     } catch (err) {
-        console.log("Etkileşim hatası:", err);
+        console.error("Etkileşim Hatası:", err);
     }
 });
 
-// Botun beklenmedik hatalarda kapanmasını önleyen hayat kurtarıcılar
-process.on('unhandledRejection', error => {
-    console.error('🛑 [HATA] Bir rejection yakalandı:', error);
-});
-
-process.on('uncaughtException', error => {
-    console.error('🛑 [HATA] Kritik bir exception yakalandı:', error);
-});
+// Botun çökmesini önlemek için hata yakalayıcılar
+process.on('unhandledRejection', error => console.error('Beklenmedik Hata:', error));
+process.on('uncaughtException', error => console.error('Kritik Hata:', error));
 
 client.login(TOKEN);
