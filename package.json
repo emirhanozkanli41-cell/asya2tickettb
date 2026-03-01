@@ -1,7 +1,7 @@
 {
   "name": "asya2-ticket",
   "version": "1.0.0",
-  "description": "Discord Ticket Bot",
+  "description": "Asya2 Discord Ticket ve Kayıt Botu",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
@@ -9,5 +9,8 @@
   "dependencies": {
     "discord.js": "^14.14.1",
     "express": "^4.18.2"
+  },
+  "engines": {
+    "node": ">=16.0.0"
   }
 }
