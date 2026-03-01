@@ -1,7 +1,13 @@
 const express = require('express');
 const app = express();
-app.get('/', (req, res) => res.send('Asya2 Bot 7/24 Aktif!'));
-app.listen(process.env.PORT || 3000);
+
+// Render'ın botu kapatmaması için basit bir web arayüzü
+app.get('/', (req, res) => res.send('🛡️ Asya2 Bot 7/24 Aktif!'));
+
+const port = process.env.PORT || 3000;
+app.listen(port, '0.0.0.0', () => {
+    console.log(`🌐 Web sunucusu ${port} portunda başlatıldı.`);
+});
 
 const { 
     Client, GatewayIntentBits, ActionRowBuilder, ButtonBuilder, 
@@ -37,7 +43,7 @@ const KARAKTER_ROLLER = {
 const KRALLIK_ROLLER = {
     'bayrak_kirmizi': '1473752790458171568', // Shinsoo
     'bayrak_sari': '1473752888546164897',    // Chunjo
-    'bayrak_mavi': '1473752930246070282'     // Jinno
+    'bayrak_mavi': '1473752930246070282'      // Jinno
 };
 
 const HOS_GELDIN_KANAL_ID = '1472014377065517146'; 
@@ -71,7 +77,7 @@ client.on('guildMemberAdd', async (member) => {
             .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
             .setFooter({ text: `Üye Sayısı: ${member.guild.memberCount}` });
         kanal.send({ content: `Hoş geldin ${member}! ⚔️`, embeds: [welcomeEmbed] });
-    } catch (e) { console.log(e) }
+    } catch (e) { console.log("Hoş geldin hatası:", e) }
 });
 
 client.on('messageCreate', async (message) => {
@@ -116,7 +122,7 @@ client.on('messageCreate', async (message) => {
             const logKanal = message.guild.channels.cache.get(LEVEL_LOG_KANAL_ID);
             if (logKanal) {
                 const lvEmbed = new EmbedBuilder().setTitle('🚀 Seviye Atlandı!').setDescription(`${message.author} Yeni Seviye: \`${userData.level}\``).setColor('#2ecc71');
-                logKanal.send({ embeds: [lvEmbed] });
+                logKanal.send({ embeds: [lvEmbed] }).catch(() => {});
             }
         }
         userXP.set(message.author.id, userData);
@@ -126,7 +132,11 @@ client.on('messageCreate', async (message) => {
     if (content.startsWith('!temizle')) {
         if (!message.member.permissions.has(PermissionsBitField.Flags.ManageMessages)) return;
         const miktar = parseInt(args[1]);
-        if (miktar > 0 && miktar <= 100) await message.channel.bulkDelete(miktar + 1, true);
+        if (miktar > 0 && miktar <= 100) {
+            try {
+                await message.channel.bulkDelete(miktar + 1, true);
+            } catch (e) { console.log("Temizleme hatası:", e) }
+        }
         return;
     }
 
@@ -147,60 +157,81 @@ client.on('messageCreate', async (message) => {
 });
 
 client.on('interactionCreate', async (interaction) => {
-    if (interaction.isButton()) {
-        // --- TEK KRALLIK KONTROLÜ ---
-        if (interaction.customId.startsWith('bayrak_')) {
-            const roleId = KRALLIK_ROLLER[interaction.customId];
-            if (interaction.member.roles.cache.has(roleId)) return interaction.reply({ content: "⚠️ Zaten bu krallıktasın!", ephemeral: true });
-            await interaction.member.roles.remove(Object.values(KRALLIK_ROLLER)).catch(() => {});
-            await interaction.member.roles.add(roleId);
-            return interaction.reply({ content: "🚩 Krallığın başarıyla güncellendi!", ephemeral: true });
-        }
-
-        // --- TEK KARAKTER KONTROLÜ ---
-        if (interaction.customId.startsWith('rol_')) {
-            const roleId = KARAKTER_ROLLER[interaction.customId];
-            if (interaction.member.roles.cache.has(roleId)) return interaction.reply({ content: "⚠️ Zaten bu sınıftasın!", ephemeral: true });
-            await interaction.member.roles.remove(Object.values(KARAKTER_ROLLER)).catch(() => {});
-            await interaction.member.roles.add(roleId);
-            return interaction.reply({ content: "⚔️ Karakter sınıfın başarıyla değiştirildi!", ephemeral: true });
-        }
-
-        if (interaction.customId.startsWith('close_')) {
-            activeTickets.delete(interaction.customId.split('_')[1]);
-            return interaction.channel.delete().catch(() => {});
-        }
-
-        if (interaction.customId.startsWith('ticket_')) {
-            if (activeTickets.has(interaction.user.id)) return interaction.reply({ content: "⚠️ Açık biletin var!", ephemeral: true });
-
-            if (interaction.customId === 'ticket_takim') {
-                const modal = new ModalBuilder().setCustomId('takim_formu').setTitle('Başvuru Formu');
-                modal.addComponents(
-                    new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('q1').setLabel("İsim ve Soy isminiz nedir ?").setStyle(TextInputStyle.Short).setRequired(true)),
-                    new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('q2').setLabel("Kaç Yaşındasınız ve Nerede Yaşıyorsunuz ?").setStyle(TextInputStyle.Short).setRequired(true)),
-                    new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('q3').setLabel("Müsaitlik Saatleriniz").setStyle(TextInputStyle.Paragraph).setRequired(true)),
-                    new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('q4').setLabel("Deneyimleriniz").setStyle(TextInputStyle.Paragraph).setRequired(true)),
-                    new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('q5').setLabel("Neden Biz?").setStyle(TextInputStyle.Paragraph).setRequired(true))
-                );
-                return await interaction.showModal(modal);
+    try {
+        if (interaction.isButton()) {
+            // --- TEK KRALLIK KONTROLÜ ---
+            if (interaction.customId.startsWith('bayrak_')) {
+                const roleId = KRALLIK_ROLLER[interaction.customId];
+                if (interaction.member.roles.cache.has(roleId)) return interaction.reply({ content: "⚠️ Zaten bu krallıktasın!", ephemeral: true });
+                
+                await interaction.member.roles.remove(Object.values(KRALLIK_ROLLER)).catch(() => {});
+                await interaction.member.roles.add(roleId).catch(() => {});
+                return interaction.reply({ content: "🚩 Krallığın başarıyla güncellendi!", ephemeral: true });
             }
 
-            if (interaction.customId === 'ticket_partner') {
-                const modal = new ModalBuilder().setCustomId('partner_formu').setTitle('Partnerlik Formu');
-                modal.addComponents(
-                    new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('p1').setLabel("Platformunuz?").setStyle(TextInputStyle.Short).setRequired(true)),
-                    new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('p2').setLabel("Kanal Linkiniz").setStyle(TextInputStyle.Short).setRequired(true)),
-                    new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('p3').setLabel("İçerik Günleriniz").setStyle(TextInputStyle.Paragraph).setRequired(true)),
-                    new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('p4').setLabel("Günlük Kaç Saat?").setStyle(TextInputStyle.Short).setRequired(true)),
-                    new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('p5').setLabel("Katkı Planınız").setStyle(TextInputStyle.Paragraph).setRequired(true))
-                );
-                return await interaction.showModal(modal);
+            // --- TEK KARAKTER KONTROLÜ ---
+            if (interaction.customId.startsWith('rol_')) {
+                const roleId = KARAKTER_ROLLER[interaction.customId];
+                if (interaction.member.roles.cache.has(roleId)) return interaction.reply({ content: "⚠️ Zaten bu sınıftasın!", ephemeral: true });
+                
+                await interaction.member.roles.remove(Object.values(KARAKTER_ROLLER)).catch(() => {});
+                await interaction.member.roles.add(roleId).catch(() => {});
+                return interaction.reply({ content: "⚔️ Karakter sınıfın başarıyla değiştirildi!", ephemeral: true });
             }
 
+            if (interaction.customId.startsWith('close_')) {
+                activeTickets.delete(interaction.customId.split('_')[1]);
+                return interaction.channel.delete().catch(() => {});
+            }
+
+            if (interaction.customId.startsWith('ticket_')) {
+                if (activeTickets.has(interaction.user.id)) return interaction.reply({ content: "⚠️ Açık biletin var!", ephemeral: true });
+
+                if (interaction.customId === 'ticket_takim') {
+                    const modal = new ModalBuilder().setCustomId('takim_formu').setTitle('Başvuru Formu');
+                    modal.addComponents(
+                        new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('q1').setLabel("İsim ve Soy isminiz nedir ?").setStyle(TextInputStyle.Short).setRequired(true)),
+                        new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('q2').setLabel("Kaç Yaşındasınız ve Nerede Yaşıyorsunuz ?").setStyle(TextInputStyle.Short).setRequired(true)),
+                        new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('q3').setLabel("Müsaitlik Saatleriniz").setStyle(TextInputStyle.Paragraph).setRequired(true)),
+                        new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('q4').setLabel("Deneyimleriniz").setStyle(TextInputStyle.Paragraph).setRequired(true)),
+                        new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('q5').setLabel("Neden Biz?").setStyle(TextInputStyle.Paragraph).setRequired(true))
+                    );
+                    return await interaction.showModal(modal);
+                }
+
+                if (interaction.customId === 'ticket_partner') {
+                    const modal = new ModalBuilder().setCustomId('partner_formu').setTitle('Partnerlik Formu');
+                    modal.addComponents(
+                        new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('p1').setLabel("Platformunuz?").setStyle(TextInputStyle.Short).setRequired(true)),
+                        new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('p2').setLabel("Kanal Linkiniz").setStyle(TextInputStyle.Short).setRequired(true)),
+                        new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('p3').setLabel("İçerik Günleriniz").setStyle(TextInputStyle.Paragraph).setRequired(true)),
+                        new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('p4').setLabel("Günlük Kaç Saat?").setStyle(TextInputStyle.Short).setRequired(true)),
+                        new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('p5').setLabel("Katkı Planınız").setStyle(TextInputStyle.Paragraph).setRequired(true))
+                    );
+                    return await interaction.showModal(modal);
+                }
+
+                activeTickets.add(interaction.user.id);
+                const channel = await interaction.guild.channels.create({
+                    name: `destek-${interaction.user.username}`,
+                    type: ChannelType.GuildText,
+                    permissionOverwrites: [
+                        { id: interaction.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
+                        { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
+                        ...YETKILI_ROLLER.map(r => ({ id: r, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }))
+                    ]
+                });
+                const closeBtn = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`close_${interaction.user.id}`).setLabel('Kapat').setStyle(ButtonStyle.Danger));
+                await channel.send({ content: `⚔️ Hoş geldin ${interaction.user}, biletin açıldı.`, components: [closeBtn] });
+                return interaction.reply({ content: `Bilet açıldı: ${channel}`, ephemeral: true });
+            }
+        }
+
+        if (interaction.type === InteractionType.ModalSubmit) {
             activeTickets.add(interaction.user.id);
+            const isTakim = interaction.customId === 'takim_formu';
             const channel = await interaction.guild.channels.create({
-                name: `destek-${interaction.user.username}`,
+                name: `${isTakim ? 'başvuru' : 'partner'}-${interaction.user.username}`,
                 type: ChannelType.GuildText,
                 permissionOverwrites: [
                     { id: interaction.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
@@ -208,39 +239,37 @@ client.on('interactionCreate', async (interaction) => {
                     ...YETKILI_ROLLER.map(r => ({ id: r, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }))
                 ]
             });
+
+            const logEmbed = new EmbedBuilder().setColor('#f1c40f').setTitle(isTakim ? '🤝 Yeni Takım Başvurusu' : '💎 Yeni Partnerlik Başvurusu').setImage(GIF_URL);
+            
+            if (isTakim) {
+                logEmbed.addFields(
+                    { name: 'İsim/Yaş', value: `${interaction.fields.getTextInputValue('q1')} / ${interaction.fields.getTextInputValue('q2')}` },
+                    { name: 'Deneyim/Neden', value: `${interaction.fields.getTextInputValue('q4')}\n${interaction.fields.getTextInputValue('q5')}` }
+                );
+            } else {
+                logEmbed.addFields(
+                    { name: 'Platform/Kanal', value: `${interaction.fields.getTextInputValue('p1')} / ${interaction.fields.getTextInputValue('p2')}` },
+                    { name: 'Planlar', value: interaction.fields.getTextInputValue('p5') }
+                );
+            }
+
             const closeBtn = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`close_${interaction.user.id}`).setLabel('Kapat').setStyle(ButtonStyle.Danger));
-            await channel.send({ content: `⚔️ Hoş geldin ${interaction.user}, biletin açıldı.`, components: [closeBtn] });
-            return interaction.reply({ content: `Bilet açıldı: ${channel}`, ephemeral: true });
+            await channel.send({ embeds: [logEmbed], components: [closeBtn] });
+            return interaction.reply({ content: `✅ Başvurunuz iletildi: ${channel}`, ephemeral: true });
         }
-    }
-
-    if (interaction.type === InteractionType.ModalSubmit) {
-        activeTickets.add(interaction.user.id);
-        const isTakim = interaction.customId === 'takim_formu';
-        const channel = await interaction.guild.channels.create({
-            name: `${isTakim ? 'başvuru' : 'partner'}-${interaction.user.username}`,
-            type: ChannelType.GuildText,
-            permissionOverwrites: [
-                { id: interaction.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-                { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
-                ...YETKILI_ROLLER.map(r => ({ id: r, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }))
-            ]
-        });
-
-        const logEmbed = new EmbedBuilder().setColor('#f1c40f').setTitle(isTakim ? '🤝 Yeni Takım Başvurusu' : '💎 Yeni Partnerlik Başvurusu').setImage(GIF_URL);
-        
-        if (isTakim) {
-            logEmbed.addFields(
-                { name: 'İsim/Yaş', value: `${interaction.fields.getTextInputValue('q1')} / ${interaction.fields.getTextInputValue('q2')}` },
-                { name: 'Deneyim/Neden', value: `${interaction.fields.getTextInputValue('q4')}\n${interaction.fields.getTextInputValue('q5')}` }
-            );
-        }
-
-        const closeBtn = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`close_${interaction.user.id}`).setLabel('Kapat').setStyle(ButtonStyle.Danger));
-        await channel.send({ embeds: [logEmbed], components: [closeBtn] });
-        return interaction.reply({ content: `✅ Başvurunuz iletildi: ${channel}`, ephemeral: true });
+    } catch (err) {
+        console.log("Etkileşim hatası:", err);
     }
 });
 
-client.login(TOKEN);
+// Botun beklenmedik hatalarda kapanmasını önleyen hayat kurtarıcılar
+process.on('unhandledRejection', error => {
+    console.error('🛑 [HATA] Bir rejection yakalandı:', error);
+});
 
+process.on('uncaughtException', error => {
+    console.error('🛑 [HATA] Kritik bir exception yakalandı:', error);
+});
+
+client.login(TOKEN);
