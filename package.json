@@ -1,13 +1,13 @@
 {
   "name": "asya2-ticket",
   "version": "1.0.0",
-  "description": "Asya2 Discord Ticket ve Kayıt Botu",
+  "description": "Asya2 Discord Ticket Bot",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "discord.js": "^14.14.1",
+    "discord.js": "latest",
     "express": "^4.18.2"
   },
   "engines": {
